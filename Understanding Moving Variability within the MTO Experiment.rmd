@@ -1,0 +1,169 @@
+---
+title: "Analyzing Differences in Moving Patterns_The MTO Experiment"
+author: "Shimul Goel"
+date: "2023-03-01"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(tidyverse)
+
+mto <- read.csv("MTO.csv")
+
+#Part 1
+#Estimating an OLS regression of working on whether someone moved using an MTO voucher.
+#We will interpret any found moving effects, and see if we can interpret our results as causal effects.
+
+MtoRegress <- lm(working_end ~ moved_using_voucher_end, data = mto)
+
+summary(MtoRegress)
+
+#Holding all variables constant, the average probability of someone being on the
+#working end is 0.46100 probability points, which is statistically significant
+#at the 0.05 level. Moreover, the probability of working increases by 0.15115
+#percentage points if the person moved using vouchers, which is a statistically
+#significant finding at every reasonable level (or, here, at the 0.05 level).
+
+#We now take this a step further by including an indicator variable for high school graduation as a control variable.
+#We will now interpret our moving effect, and see whether we can look for any omitted variable bias seen in the above.
+
+MtoRegressHS <- lm(working_end ~ moved_using_voucher_end + high_school_grad_start, data = mto)
+
+summary(MtoRegressHS)
+
+#Holding all variables constant, the average probability of someone being in the
+#working end here is 0.22168 probability points, statistically significant at 
+#the 0.05 level. The probability of working increases by 0.08064 percentage points 
+#if the person moved using vouchers, and by another 0.70040 percentage points if
+#the person had a high school graduation start, both findings being statistically
+#significant at every reasonable level.
+
+#The MTO experiment was a randomized experiment where families living in high poverty areas were randomly assigned to receive housing vouchers. We will use treated as our instrument. 
+#This variable is equal to 1 for families that received a housing voucher through the experiment, and is 0 otherwise.
+
+#The use of the variable 'treated' in this model is a sound and valid instrument 
+#in terms of the independence assumption and the exclusion restriction, given that
+#it violates neither of these requirements. This is due to the fact that it is
+#simply an instrument of indication of which group was the control group and 
+#which one the treated, having no effect on the *outcome* on its own. The instrument
+#only has an effect on the exposure, not the outcome. Since this is simply an
+#indicator, it also does not affect the value of that the observations in the two 
+#groups have, that is, it does not cause the value of one observation to influence
+#the value of the other observation.
+
+#Let us check the estimated coefficient now, and estimate the first-stage regression here.
+
+firstmto <- lm(moved_using_voucher_end ~ treated, data = mto)
+summary(firstmto)
+
+#Here, we can see that the estimated coefficient on the instrument variable
+#results in an outcome statistically significant at the 1% level, and less than 
+#the value of 1. This indicates that the instrument does satisfy the first-stage
+#assumption. 
+#The fact that the coefficient is found to be less than 1 simply indicates
+#that not everyone that received a voucher decided to move. But what we can see 
+#is that there is a positive relationship between moving and getting a voucher 
+#to help move, that is, for every person given a voucher, the average
+#probability of moving increased by  5.244e-01 percentage points, significant
+#statistically at every reasonable level. This thereby further points to the 
+#validity of the instrument used in our regression.
+
+#Reduced form regression:
+
+reducedmto <- lm(working_end ~ treated, data = mto)
+summary(reducedmto)
+
+ratioreport <- coef(reducedmto)["treated"]/coef(firstmto)["treated"]
+print(ratioreport)
+
+#The calculated ratio is: -0.01042101
+
+#Verifying results using R command ivreg and AER package:
+library(AER)
+
+ivRegmto <- ivreg(working_end ~ moved_using_voucher_end | treated , data = mto)
+summary(ivRegmto)
+
+#This shows us the average effect of receiving vouchers on families that moved as
+#a result, without looking into the baseline variables. This shows us that the 
+#probability of families moving post receiving a voucher shows a decrease in 
+#average by -0.01042 percentage points, which is not statistically significant
+#at our chosen level. Without getting vouchers, the probability of moving was at 
+#0.51624 percentage points, statistically significant at the 1% level, a probability 
+#which decreases by -0.01042 percentage points when given vouchers.
+
+#Including base 9 characteristics:
+
+firstmtoALL <- lm(moved_using_voucher_end ~ treated + high_school_grad_start + male_respondant 
+               + black_respondant + never_married_start + parent_before_18 + 
+                 on_welfare_start + verydissat_neighborhood_start + 
+                 victim_of_crime_start + want_move_gangs_drugs_start, data = mto)
+summary(firstmtoALL)
+
+#Using the set-up as before, we see here that when keeping all variables
+#constant, the probability of moving without using vouchers was actually negative, 
+#at -0.133358 probability points. However, on using the treatment, we see the 
+#probability average of moving increase by 0.522178 percentage points, indicating
+#a positive relationship between the treatment and outcome. Both these findings 
+#are statistically significant at the 1% level. As for the other nine variables,
+#we can see that having a high school graduation start has a negative impact on the
+#probability of moving by -0.053600 percentage points, statistically significant 
+#at the 5% level. The variable black_respondent shows that if the respondent was
+#a black person, the probability of moving was increased by 0.047393 probability 
+#points, significant at the 5% level. If the respondent was a parent before reaching
+#the age of 18, the probability of moving was increased by 0.043900 percentage 
+#points, statistically significant at the 10% level. If the respondent was 
+#dissatisfied with the neighborhood to begin with,then the probability of them 
+#moving was increased by 0.110258 percentage points, statistically significant at 
+#every reasonable level.
+#We can see that between these findings and the ones where we identified the first-stage regression, the 
+#coefficient value actually increases here (0.522178) when compared to the previous
+#finding, where we found without accounting for all the controls (5.244e-01). This 
+#indicates that the coefficient outcome found before was more accurate/better 
+#fitting and more concise a finding of the outcome than in this question. This 
+#could be explained by the following possible reasons: using this many controls 
+#actually could have ended up explaining some of the variation that was previously
+#just explained by the treatment variable alone. Essentially, the nine control
+#variables reduce the effect of the treatment on the outcome by adding too many
+#other reasons for explaining the outcome than leaving it up to the treatment alone.
+#This is an important finding given that if we had not controlled for these
+#variables, we would have overestimated the effect of the treatment on the outcome,
+#resulting in a biased estimation of the relationship between the treatment and outcome.
+
+#Full IV model based on all 9 baseline characteristics:
+
+ivRegmto2 <- ivreg(working_end ~ moved_using_voucher_end + male_respondant + 
+                     high_school_grad_start + black_respondant + 
+                     never_married_start + on_welfare_start + parent_before_18 +
+                     victim_of_crime_start + verydissat_neighborhood_start + 
+                     want_move_gangs_drugs_start| treated +
+                     male_respondant + high_school_grad_start + black_respondant + 
+                     never_married_start + on_welfare_start + parent_before_18 +
+                     victim_of_crime_start + verydissat_neighborhood_start + 
+                     want_move_gangs_drugs_start, data = mto)
+summary(ivRegmto2)
+
+#Here, now correcting for all baseline variables, we can see that the coefficient 
+#for moved_using_voucher_end actually increased to -0.01939 probability points 
+#versus the previous -0.01042, also becoming more significant (although not at a 
+#statistically significant level). As our coefficient gains significance, we see
+#a decrease in standard error as well (0.02097) versus the previous 0.03504. This
+#shows us that our model is much better fitting compared to the one in R command ivreg and AER, 
+#indicating that using all baseline characteristics was helpful in providing us with
+#a better fit and estimation. However, all this being said, we still do not have a 
+#statistically significant coefficient outcome.
+
+
+```
+
+
